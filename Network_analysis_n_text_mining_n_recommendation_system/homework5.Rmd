@@ -1,0 +1,350 @@
+---
+title: "homework5"
+author: "sai charan talipineni"
+date: "28 March 2017"
+output: word_document
+---
+```{r task1, warning=FALSE}
+library(plyr)
+library(ggplot2)
+library(tm)
+library(lsa)
+library(NMF)
+
+set.seed(123)
+ng<-read.csv("D:/semester/2nd sem/DATA_MINING/hw5/Newsgroup.csv",header = TRUE, stringsAsFactors = FALSE, fill = TRUE)
+
+ggplot(data = ng, aes(x=factor(Topic))) + geom_bar(stat="count") + scale_x_discrete("Topic") + scale_y_continuous("Frequency") + coord_flip() 
+
+
+
+top.topics = sort(table(ng$Topic), decreasing = T)[1:4]
+top.topics = names(top.topics)
+top.topics
+
+doc_idx = which(ng$Topic %in% top.topics)
+subdoc = ng[doc_idx,]
+
+corpus = Corpus(VectorSource(subdoc$Content))
+corpus
+
+corpus = tm_map(corpus, content_transformer(tolower))
+inspect(corpus[1:3])
+
+corpus = tm_map(corpus, removePunctuation)
+inspect(corpus[1:3])
+
+corpus = tm_map(corpus, removeNumbers)
+inspect(corpus[1:3])
+
+corpus = tm_map(corpus, function(x) removeWords(x,
+stopwords("english")))
+inspect(corpus[1:3])
+
+corpus = tm_map(corpus, stemDocument, language = "english")
+inspect(corpus[1:3])
+
+corpus = tm_map(corpus, stripWhitespace)
+inspect(corpus[1:3])
+
+corpus
+
+td.mat = TermDocumentMatrix(corpus)
+td_freq = findFreqTerms(td.mat, 4)
+td.mat_idx = which(row.names(td.mat) %in% td_freq)
+td.mat = td.mat[td.mat_idx,]
+dim(td.mat)
+
+dist.mat = dist(t(as.matrix(td.mat)))
+doc.mds = cmdscale(dist.mat)
+data = data.frame(x = doc.mds[, 1], y = doc.mds[, 2],
+Topic = subdoc$Topic, id = row.names(subdoc))
+ggplot(data, aes(x = x , y = y, color = Topic)) + geom_point(shape = 2) + ggtitle("MDS PLOT") 
+
+
+td.mat = as.matrix(td.mat)
+td.mat.w = lw_tf(td.mat) * gw_idf(td.mat)
+dist.mat.w = dist(t(as.matrix(td.mat.w)))
+doc.mds.w = cmdscale(dist.mat.w)
+data.w = data.frame(x = doc.mds.w[, 1], y = doc.mds.w[, 2], Topic = subdoc$Topic, id = row.names(subdoc))
+ggplot(data.w, aes(x = x, y = y, color = Topic)) + geom_point(shape = 2) + ggtitle("MDS PLOT (TF-IDF)")
+
+lsa.space = lsa(td.mat.w, dims = 4)
+
+dist.mat.lsa = dist(t(as.textmatrix(lsa.space)))
+doc.mds.lsa = cmdscale(dist.mat.lsa)
+dim(doc.mds.lsa)
+
+data.lsa = data.frame(x = doc.mds.lsa[, 1], y = doc.mds.lsa[, 2],
+Topic = subdoc$Topic, id =
+row.names(subdoc))
+ggplot(data.lsa, aes(x = x, y = y, color = Topic)) + geom_point(shape = 2) + ggtitle("MDS plot (LSA)")
+
+
+
+nmf_res = nmf(td.mat, 3, "lee")
+
+V_hat = fitted(nmf_res)
+
+W = basis(nmf_res)
+
+H = coef(nmf_res)
+
+dist_mat_nmf = dist(t(H))
+doc_mds_nmf = cmdscale(dist_mat_nmf)
+data_nmf = data.frame(x = doc_mds_nmf[, 1], y = doc_mds_nmf[, 2],
+Topic = subdoc$Topic, id = row.names(subdoc))
+ggplot(data_nmf, aes(x = x, y = y, color = Topic)) + geom_point(shape = 2) + ggtitle("MDS PLOT (NMF)")
+
+#From the TF-IDF, we can see the Term importance( = term frequency (TF)*inverse-document frequency (IDF) )in the documents by Topic.
+#From the LSA plot, we can see the similar terms map to similar location in low dimensional space and a clear low-dimensional space reflects semantic association
+#From the NMF, the data clusters represent the related documents.
+
+```
+
+
+```{r task2, warning=FALSE}
+set.seed(123)
+library(igraph)
+udata<-read.table("http://files.grouplens.org/datasets/movielens/ml-100k/u.data", header = FALSE)
+names(udata)<-c("userid","itemid","rating","timestamp")
+udata <- udata[which(udata$time >= 890352000),]
+udata<-udata[which(udata$rating==5),]
+udata$rating<-NULL
+udata$timestamp<-NULL
+udata$userid<-as.character(udata$userid)
+udata$itemid<-as.character(udata$itemid)
+str(sort(unique(udata$userid)))
+str(sort(unique(udata$itemid)))
+
+uitem<-read.delim("http://files.grouplens.org/datasets/movielens/ml-100k/u.item", sep = "|", header = FALSE)
+uitem<-uitem[,c("V1","V2")]
+names(uitem)<-c("itemid","movietitle")
+uitem$itemid<-as.character(uitem$itemid)
+str(sort(unique(uitem$itemid)))
+
+umerge<-merge(uitem,udata)
+umerge$movietitle<-as.character(umerge$movietitle)
+str(sort(unique(umerge$userid)))
+str(sort(unique(umerge$itemid)))
+umerge$itemid<-NULL
+umerge<-umerge[c(2,1)]
+
+topmovies = sort(table(umerge$movietitle), decreasing = T)
+topmovies = rownames(topmovies[1:30])
+topmovies[1:10]
+df = subset(umerge, movietitle %in% topmovies)
+
+g = graph.data.frame(df, directed = T)
+mat = get.adjacency(g)
+mat = as.matrix(mat)
+m2 = t(mat) %*% mat
+movie.idx = which(colSums(m2) > 0)
+mov.matrix = m2[movie.idx, movie.idx]
+diag(mov.matrix) = 0  
+movie.idx = which(colSums(mov.matrix) > 0)
+mov.matrix = mov.matrix[movie.idx, movie.idx]
+dim(mov.matrix)
+
+mov.matrix[which(mov.matrix < 10)] = 0
+
+rownames(mov.matrix)[order(colSums(mov.matrix), decreasing = T)][1:10]
+
+
+g = graph.adjacency(mov.matrix, weighted = T, mode = "undirected", diag = F)
+
+plot(g, layout = layout.fruchterman.reingold, vertex.label = V(g)$name)
+
+plot(g, layout = layout.fruchterman.reingold, vertex.size = 8, vertex.label.cex = 0.75)
+
+fc = fastgreedy.community(g)
+modularity(fc)
+
+membership(fc)
+
+plot(fc, g, main = "modularity community", layout = layout.fruchterman.reingold,
+vertex.size = 8, vertex.label.cex = 0.5)
+
+dendPlot(fc)
+
+deg=degree(g)
+deg
+
+top = order(deg, decreasing=T)[1:10]
+top1 = order(deg, decreasing=T)[1:1]
+top2 = order(deg, decreasing=T)[2:2]
+top3 = order(deg, decreasing=T)[3:3]
+top4 = order(deg, decreasing=T)[4:4]
+top5 = order(deg, decreasing=T)[5:5]
+V(g)$size = abs(deg) * 0.8
+V(g)$color = "white"
+V(g)$label.color = "gray33"
+V(g)$label.cex = 0.66
+E(g)$color = "black"
+V(g)[top]$label.color = "black"
+V(g)[top]$label.cex = 1
+V(g)[top1]$color = "yellow"
+V(g)[top2]$color = "purple"
+V(g)[top3]$color = "red"
+V(g)[top4]$color = "orange"
+V(g)[top5]$color = "blue"
+plot(g, layout = layout.circle)
+title("Degree centrality")
+
+clo = closeness(g)
+clo
+top = order(clo, decreasing=T)[1:10]
+top1 = order(clo, decreasing=T)[1:1]
+top2 = order(clo, decreasing=T)[2:2]
+top3 = order(clo, decreasing=T)[3:3]
+top4 = order(clo, decreasing=T)[4:4]
+top5 = order(clo, decreasing=T)[5:5]
+V(g)$size = (abs(clo)^2) * 1e+06 * 5
+V(g)$color = "white"
+V(g)$label.color = "gray33"
+V(g)$label.cex = 0.66
+V(g)[top]$label.color = "black" 
+V(g)[top1]$color = "yellow"
+V(g)[top2]$color = "purple"
+V(g)[top3]$color = "red"
+V(g)[top4]$color = "orange"
+V(g)[top5]$color = "blue"
+V(g)[top]$label.cex = 1
+plot(g, layout = layout.circle)
+title("closeness")
+
+
+bet = betweenness(g)
+bet
+top = order(bet, decreasing=T)[1:10]
+top1 = order(bet, decreasing=T)[1:1]
+top2 = order(bet, decreasing=T)[2:2]
+top3 = order(bet, decreasing=T)[3:3]
+top4 = order(bet, decreasing=T)[4:4]
+top5 = order(bet, decreasing=T)[5:5]
+V(g)$size = abs(bet) * 0.5
+V(g)$color = "white"
+V(g)$label.color = "gray33"
+V(g)$label.cex = 0.66
+V(g)[top]$label.color = "black" 
+V(g)[top1]$color = "yellow"
+V(g)[top2]$color = "red"
+V(g)[top3]$color = "orange"
+V(g)[top4]$color = "blue"
+V(g)[top5]$color = "purple"
+V(g)[top]$label.cex = 1
+plot(g, layout = layout.circle)
+title("betweenness")
+
+pr = page.rank(g)$vector
+pr
+top = order(pr, decreasing=T)[1:10]
+top1 = order(pr, decreasing=T)[1:1]
+top2 = order(pr, decreasing=T)[2:2]
+top3 = order(pr, decreasing=T)[3:3]
+top4 = order(pr, decreasing=T)[4:4]
+top5 = order(pr, decreasing=T)[5:5]
+V(g)$size = abs(pr) * 300
+V(g)$color = "white"
+V(g)$label.color = "gray33"
+V(g)$label.cex = 0.66
+V(g)[top]$label.color = "black" ## highlight the top-5 nodes
+V(g)[top1]$color = "yellow"
+V(g)[top2]$color = "red"
+V(g)[top3]$color = "blue"
+V(g)[top4]$color = "green"
+V(g)[top5]$color = "purple"
+V(g)[top]$label.cex = 1
+plot(g, layout = layout.circle)
+title("PageRank")
+
+
+#Degree centrality shows the most number of connections for a node. From the figure, the yellow/star wars (1977) one has highest degree centrality.
+#Closeness is based on the length of the average shortest path between a node and all nodes in a graph.From the figure, the yellow/star wars (1977) seems to have high closeness.
+#Betweenness denotes how many pairs of individuals would have to go through a certain node in order to reach one another. From the figure, Titanic seems to have high betweenness.
+#A page's importance is given by the total votes it received and the importance of its voters. Rank(u): importance score of page u. From the figure, Star Wars (1977) has the highest PageRank
+
+```
+
+
+
+```{r task3, warning=FALSE}
+set.seed(123)
+library(recommenderlab)
+library(dplyr)
+library(igraph)
+
+book_ratings<-read.csv("D:/semester/2nd sem/DATA_MINING/hw5/BX-CSV-Dump/BX-Book-Ratings.csv", header = TRUE, sep = ";", stringsAsFactors = FALSE)
+
+books<-read.csv("D:/semester/2nd sem/DATA_MINING/hw5/BX-CSV-Dump/BX-Books.csv", header = TRUE, sep=";",stringsAsFactors = FALSE)
+
+books$Year.Of.Publication<-as.numeric(books$Year.Of.Publication)
+
+books.m<-merge(book_ratings,books)
+books.m<-na.omit(books.m)
+books.m<-filter(books.m, Year.Of.Publication>=1998)
+books.m<-books.m[,c("ISBN","User.ID","Book.Rating")]
+
+d4 = data.frame(from = books.m$User.ID, to = books.m$ISBN, weight = books.m$Book.Rating)
+g = graph.data.frame(d4)
+mat = get.adjacency(g)
+mat.w = get.adjacency(g, attr = "weight")
+book.idx = which(colSums(mat) >= 10)
+user.idx = which(rowSums(mat) >= 10)
+rmat = mat.w[user.idx, book.idx]
+dim(rmat)
+
+m = as.matrix(rmat)
+m = as(m, "realRatingMatrix")
+dim(m)
+
+e = evaluationScheme(m, method = "cross", k=4, given = 5, goodRating = 6)
+e
+
+r1 = Recommender(getData(e, "train"), "Random")
+
+r2 = Recommender(getData(e, "train"), "Popular")
+
+r3 = Recommender(getData(e, "train"), "UBCF")
+
+r4 = Recommender(getData(e, "train"), "IBCF")
+
+p1 = predict(r1, getData(e, "known"), type="ratings")
+
+p2 = predict(r2, getData(e, "known"), type="ratings")
+
+p3 = predict(r3, getData(e, "known"), type="ratings")
+
+p4 = predict(r4, getData(e, "known"), type="ratings")
+
+error = rbind(
+calcPredictionAccuracy(p1, getData(e, "unknown")),
+calcPredictionAccuracy(p2, getData(e, "unknown")),
+calcPredictionAccuracy(p3, getData(e, "unknown")),
+calcPredictionAccuracy(p4, getData(e, "unknown"))
+)
+rownames(error) = c("Random", "Popular", "UBCF", "IBCF")
+t(error)
+
+# algorithms = list(
+# "random items" = list(name = "RANDOM", param = NULL),
+# "popular items" = list(name = "POPULAR", param = NULL),
+# "user-based CF" = list(name = "UBCF", param = list(method = "Cosine",
+# nn = 50, minRating = 3)),
+# "item-based CF" = list(name = "IBCF", param = NULL)
+# )
+# results = evaluate(e, method = algorithms, n = c(1, 3, 5, 10, 15, 20))
+# 
+# names(results)
+# 
+# avg(results)
+# 
+# getConfusionMatrix(results[["item-based CF"]])[[1]]
+# 
+# plot(results, annotate = c(1,2,3,4), legend = "topleft")
+
+#From the performance table, popular recommendation method has low RMSE, MSE compared to the others and found to be the best one.
+
+
+```
+
