@@ -1,0 +1,316 @@
+---
+title: Homework 2
+author: "sai charan talipineni"
+date: "31 January 2017"
+output: word_document
+---
+
+```{r q1}
+#**Question 1:**
+setwd("D:/semester/2nd sem/DATA_MINING/hw2")
+audit<-read.csv("audit.csv")
+audit[1:2,]
+#RISK_Adjustment, TARGET_Adjusted are the response variables and the other variables including Age, #Employment, Education, Marital, Occupation, Income, Gender, Deductions, Hours are predictors.
+```
+
+
+
+```{r missing values}
+#**Missing values:**
+
+sapply(audit, function(x) sum(is.na(x)))
+
+getmode <- function(v) {
+   uniqv <- unique(v)
+   uniqv[which.max(tabulate(match(v, uniqv)))]
+}
+
+mode_employ<-getmode(audit$Employment)
+mode_occup<-getmode(audit$Occupation)
+audit$Employment[is.na(audit$Employment)] <- mode_employ
+audit$Occupation[is.na(audit$Occupation)] <- mode_occup
+audIt<-audit
+audIt$TARGET_Adjusted<-as.factor(audIt$TARGET_Adjusted)
+```
+
+
+
+```{r q2}
+#**Question 2:**
+#**(a)**  
+summary(audIt)  
+#From the above summary we can know that Age, Income, Deductions, Hours, RISK_Adjustment are numerical variables. The summary table is as follows.
+
+Age = c(summary(audit$Age), sd(audit$Age))
+Income = c(summary(audit$Income), sd(audit$Income))
+Deductions = c(summary(audit$Deductions), sd(audit$Deductions))
+Hours = c(summary(audit$Hours), sd(audit$Hours))
+RISK_Adjustment = c(summary(audit$RISK_Adjustment), sd(audit$RISK_Adjustment))
+result = rbind(Age, Income, Deductions, Hours,RISK_Adjustment)
+result = as.data.frame(result)
+colnames(result)[7] = c("sd")
+result
+
+
+#**(b)**
+library(e1071)
+plot(density(audit$Age))
+skewness(audit$Age)
+#right skewed
+
+plot(density(audit$Income))
+skewness(audit$Income)
+#right skewed
+
+plot(density(audit$Deductions))
+skewness(audit$Deductions)
+#right skewed
+
+plot(density(audit$Hours))
+skewness(audit$Hours)
+#right skewed
+
+plot(density(audit$RISK_Adjustment))
+skewness(audit$RISK_Adjustment)
+#right skewed
+
+
+#correlation
+library(car)
+dt = audit[,c('Age','Income','Deductions','Hours','RISK_Adjustment')]
+cor(dt)
+
+#scatterplot
+suppressWarnings(scatterplotMatrix(dt, spread = FALSE, lty.smooth = 2, main = 'Scatter Plot Matrix'))
+
+
+#**(c)**
+library(lattice)
+library(nutshell)
+histogram(~TARGET_Adjusted|Employment,data=audit,layout=c(2,4),col="black")
+histogram(~TARGET_Adjusted|Education,data=audit,layout=c(4,4),col="black")
+histogram(~TARGET_Adjusted|Marital,data=audit,layout=c(2,3),col="black")
+histogram(~TARGET_Adjusted|Occupation,data=audit,layout=c(3,5),col="black")
+histogram(~TARGET_Adjusted|Gender,data=audit,layout=c(1,2),col="black")
+
+histogram(~RISK_Adjustment|Employment,data=audit,layout=c(2,4),col="black")
+histogram(~RISK_Adjustment|Education,data=audit,layout=c(4,4),col="black")
+histogram(~RISK_Adjustment|Marital,data=audit,layout=c(2,3),col="black")
+histogram(~RISK_Adjustment|Occupation,data=audit,layout=c(3,5),col="black")
+histogram(~RISK_Adjustment|Gender,data=audit,layout=c(1,2),col="black")
+
+```
+
+
+
+```{r q3}
+#**Question 3:**
+require(boot)
+
+audit_t<-audit[,c(-1,-11)]
+audit_r<-audit[,c(-1,-12)]
+
+###############
+xaudit_t <- model.matrix(TARGET_Adjusted~.,data=audit_t)[,-1]
+dfxaudit_t<-as.data.frame(xaudit_t)
+Audit_t<-data.frame(targetadj=audit_t$TARGET_Adjusted,dfxaudit_t)
+audit_t_t<-Audit_t
+audit_t_t<-audit_t_t[sample(nrow(audit_t_t)),]   #randomly shuffle data
+
+#Create 10 equally size folds
+folds <- cut(seq(1,nrow(audit_t_t)),breaks=10,labels=FALSE)
+result<-NULL
+temp<-NULL
+#Perform 10 fold cross validation
+for(i in 1:10){
+    testIndexes <- which(folds==i,arr.ind=TRUE)
+    testData <- audit_t_t[testIndexes, ]
+    trainData <- audit_t_t[-testIndexes, ]
+    m1 = glm(targetadj~.,family=binomial,data=trainData)
+    ptest = predict(m1,newdata=data.frame(testData),type="response")
+    temp<-cbind(ptest,testData$targetadj)
+    result<-rbind(result,temp)
+    
+}
+result<-as.data.frame(result)
+names(result)<-c("ptest","ttest")
+btest=floor(result$ptest+0.5)  
+conf.matrix = table(result$ttest,btest)
+error=(conf.matrix[1,2]+conf.matrix[2,1])/2000
+accuracy=1-error
+accuracy
+precision=conf.matrix[1,1]/(conf.matrix[1,1]+conf.matrix[2,1])
+precision
+Recall=conf.matrix[1,1]/(conf.matrix[1,1]+conf.matrix[1,2])
+Recall
+F1score=2*precision*Recall/(precision+Recall)
+F1score
+library(pROC)
+aucc=auc(result$ttest, result$ptest)
+aucc
+
+#liftchart
+df <- result
+rank.df=as.data.frame(df[order(result$ptest,decreasing=TRUE),])
+colnames(rank.df) = c('predicted','actual')
+baserate=mean(result$ttest)
+ax=dim(result$ttest)
+ay.base=dim(result$ttest)
+ay.pred=dim(result$ttest)
+ax[1]=1
+ay.base[1]=baserate
+ay.pred[1]=rank.df$actual[1]
+for (i in 2:2000) {
+  ax[i]=i
+  ay.base[i]=baserate*i ## uniformly increase with rate xbar
+  ay.pred[i]=ay.pred[i-1]+rank.df$actual[i]
+}
+
+df=cbind(rank.df,ay.pred,ay.base)
+plot(ax,ay.pred,xlab="number of cases",ylab="number of successes",main="Lift: Cum successes sorted by pred val/success prob")
+points(ax,ay.base,type="l")
+
+#roc
+cut=1/2
+truepos <- result$ttest==1 & result$ptest>=cut 
+trueneg <- result$ttest==0 & result$ptest<cut
+# Sensitivity (predict default when it does happen)
+sum(truepos)/sum(result$ttest==1)
+suppressWarnings( library(ROCR))
+data<-result
+pred <- prediction(result$ptest,result$ttest)
+perf <- performance(pred, "sens", "fpr")
+plot(perf)
+#######################
+
+###############
+xaudit_t2 <- model.matrix(TARGET_Adjusted~Age+Education+Income,data=audit_t)[,-1]
+dfxaudit_t2<-as.data.frame(xaudit_t2)
+Audit_t2<-data.frame(targetadj=audit_t$TARGET_Adjusted,dfxaudit_t2)
+audit_t2_t2<-Audit_t2
+audit_t2_t2<-audit_t2_t2[sample(nrow(audit_t2_t2)),]   #randomly shuffle data
+
+#Create 10 equally size folds
+folds <- cut(seq(1,nrow(audit_t2_t2)),breaks=10,labels=FALSE)
+result<-NULL
+temp<-NULL
+testIndexes<-NULL
+trainData<-NULL
+ptest<-NULL
+#Perform 10 fold cross validation
+for(i in 1:10){
+    testIndexes <- which(folds==i,arr.ind=TRUE)
+    testData <- audit_t2_t2[testIndexes, ]
+    trainData <- audit_t2_t2[-testIndexes, ]
+    m2 = glm(targetadj~Age+EducationBachelor+EducationCollege+EducationHSgrad+EducationProfessional+EducationVocational+EducationYr10+EducationYr5t6+EducationYr7t8+Income,family=binomial,data=trainData)
+    ptest = predict(m2,newdata=data.frame(testData),type="response")
+    temp<-cbind(ptest,testData$targetadj)
+    result<-rbind(result,temp)
+    
+}
+conf.matrix<-NULL
+result<-as.data.frame(result)
+names(result)<-c("ptest","ttest")
+btest=floor(result$ptest+0.5)  
+conf.matrix = table(result$ttest,btest)
+error=(conf.matrix[1,2]+conf.matrix[2,1])/2000
+accuracy1=1-error
+accuracy1
+precision1=conf.matrix[1,1]/(conf.matrix[1,1]+conf.matrix[2,1])
+precision1
+Recall1=conf.matrix[1,1]/(conf.matrix[1,1]+conf.matrix[1,2])
+Recall1
+F1score1=2*precision1*Recall1/(precision1+Recall1)
+F1score1
+auc1=auc(result$ttest, result$ptest)
+auc1
+
+#liftchart
+df <- result
+rank.df=as.data.frame(df[order(result$ptest,decreasing=TRUE),])
+colnames(rank.df) = c('predicted','actual')
+baserate=mean(result$ttest)
+ax=dim(result$ttest)
+ay.base=dim(result$ttest)
+ay.pred=dim(result$ttest)
+ax[1]=1
+ay.base[1]=baserate
+ay.pred[1]=rank.df$actual[1]
+for (i in 2:2000) {
+  ax[i]=i
+  ay.base[i]=baserate*i ## uniformly increase with rate xbar
+  ay.pred[i]=ay.pred[i-1]+rank.df$actual[i]
+}
+
+df=cbind(rank.df,ay.pred,ay.base)
+plot(ax,ay.pred,xlab="number of cases",ylab="number of successes",main="Lift: Cum successes sorted by pred val/success prob")
+points(ax,ay.base,type="l")
+
+#roc
+cut=1/2
+truepos <- result$ttest==1 & result$ptest>=cut 
+trueneg <- result$ttest==0 & result$ptest<cut
+# Sensitivity (predict default when it does happen)
+sum(truepos)/sum(result$ttest==1)
+suppressWarnings( library(ROCR))
+data<-result
+pred <- prediction(result$ptest,result$ttest)
+perf <- performance(pred, "sens", "fpr")
+plot(perf)
+
+#######################
+
+
+
+m1 = glm(targetadj~.,family=binomial,data=audit_t_t)
+oddsratio<-exp(m1$coefficients)
+oddsratio
+
+```
+
+
+
+```{r q4}
+#**Question 4**
+leave.one.out <- function(formula, audit_r){
+  n = length(audit_r$RISK_Adjustment)
+  error = dim(n)
+  for(k in 1:n){
+    id = c(1:n)
+    id.train = id[id != k]
+    fit = lm(formula, data = audit_r[id.train, ])
+    predicted = predict(fit)
+    observation = audit_r$RISK_Adjustment[-id.train]
+    error[k] = predicted - observation
+  }
+  me=mean(error)
+  rmse = sqrt(mean(error^2))
+  return(rmse)
+}
+
+#linear
+formA<-RISK_Adjustment~.
+formB<-RISK_Adjustment~Education+Income+Deductions+Hours
+formC<-RISK_Adjustment~Employment+Income+Deductions
+
+suppressWarnings(rmseA<-leave.one.out(formA, audit_r))
+rmseA
+suppressWarnings(rmseB<-leave.one.out(formB, audit_r))
+rmseB
+suppressWarnings(rmseC<-leave.one.out(formC, audit_r))
+rmseC
+#non-linear
+formD<-RISK_Adjustment~poly(Age, degree = 2) + poly(Income, degree = 2)+Occupation
+formE<-RISK_Adjustment~poly(Deductions, degree = 2) + poly(Income, degree = 3) +Education+Employment
+
+suppressWarnings(rmseD<-leave.one.out(formD, audit_r))
+rmseD
+suppressWarnings(rmseE<-leave.one.out(formE, audit_r))
+rmseE
+
+library(MASS)
+fit = lm(RISK_Adjustment~poly(Age, degree = 2) + poly(Income, degree = 2)+Occupation, data = audit_r)
+stepAIC(fit, direction="backward")
+
+```
+
