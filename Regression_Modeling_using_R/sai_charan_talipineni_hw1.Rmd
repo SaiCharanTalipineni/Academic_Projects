@@ -1,0 +1,326 @@
+---
+title: "Homework1"
+author: "Sai Charan Talipineni"
+date: "17 January 2017"
+output: word_document
+---
+**1-**  
+Response variable: AmountSpent
+
+Predictor variables: Age, Gender, OwnHome, Married, Location, Salary, Children, History, Catalogs.  
+
+
+
+**2-**  
+**a-**   
+There are no explicit missing values in the dataset. The values in the "History" coulmn were set to 'NA' means 'not yet purchased'(according to data description).so, I changed 'NA' to 'not_yet_purchased' to make work easier.  
+
+```{r question_2_a}
+orgdata<-read.csv("D:/semester/2nd sem/DATA_MINING/hw1/DirectMarketing.csv")
+orgdata$History<-as.character(orgdata$History)
+orgdata$History[is.na(orgdata$History)]<-"not_yet_purchased"
+orgdata$History<-as.factor(orgdata$History)
+```
+
+**2b-**  
+
+```{r question_2_b}
+summary(orgdata)
+
+print("Salary")
+summary(orgdata$Salary)
+sd(orgdata$Salary)
+
+print("Children")
+summary(orgdata$Children)
+sd(orgdata$Children)
+
+print("Catalogs")
+summary(orgdata$Catalogs)
+sd(orgdata$Catalogs)
+
+print("AmountSpent")
+summary(orgdata$AmountSpent)
+sd(orgdata$AmountSpent)
+```
+
+**2c-**
+
+```{r question_2_c}
+require(ggplot2)
+ggplot(orgdata, aes(x=Salary)) + geom_density() #right skewed/positive skewed distribution
+ggplot(orgdata, aes(x=AmountSpent)) + geom_density() #right skewed/positive skewed distribution
+
+```
+
+**2d-**
+
+```{r question_2_d}
+cor(orgdata$Salary, orgdata$AmountSpent)
+plot(orgdata$Salary, orgdata$AmountSpent, xlab="Salary", ylab="AmountSpent")
+
+cor(orgdata$Children, orgdata$AmountSpent)
+plot(orgdata$Children, orgdata$AmountSpent, xlab="children", ylab="AmountSpent")
+
+cor(orgdata$Catalogs, orgdata$AmountSpent)
+plot(orgdata$Catalogs, orgdata$AmountSpent, xlab="catalogs", ylab="AmountSpent")
+```
+
+**2e-**
+
+```{r question_2_e}
+
+ggplot(orgdata, aes(x = AmountSpent, fill = Age)) + geom_density(alpha = 0.5)
+
+ggplot(orgdata, aes(x = AmountSpent, fill = Gender)) + geom_density(alpha = 0.5)
+
+ggplot(orgdata, aes(x = AmountSpent, fill = OwnHome)) +  geom_density(alpha = 0.5)
+
+ggplot(orgdata, aes(x = AmountSpent, fill = Married)) +  geom_density(alpha = 0.5)
+
+ggplot(orgdata, aes(x = AmountSpent, fill = Location)) +  geom_density(alpha = 0.5)
+
+ggplot(orgdata, aes(x = AmountSpent, fill = History)) +  geom_density(alpha = 0.5)
+
+```
+
+**2f-**
+
+```{r question_2_f}
+#Amountspent and Age
+Middle_sum<-0
+Middle_count<-0
+Young_sum<-0
+Young_count<-0
+Old_sum<-0
+Old_count<-0
+for(i in 1:1000){
+  if(orgdata$Age[i]=="Young"){
+    Young_sum<-Young_sum+(orgdata$AmountSpent)[i]
+    Young_count<-Young_count+1
+  }
+  else if(orgdata$Age[i]=="Middle"){
+    Middle_sum<-Middle_sum+(orgdata$AmountSpent)[i]
+    Middle_count<-Middle_count+1
+  }
+ else if(orgdata$Age[i]=="Old"){
+    Old_sum<-Old_sum+(orgdata$AmountSpent)[i]
+    Old_count<-Old_count+1
+  }
+}
+
+Age_Young_Mean<-(Young_sum/Young_count)
+Age_Middle_Mean<-(Middle_sum/Middle_count)
+Age_Old_Mean<-(Old_sum/Old_count)
+Age_Young_Mean
+Age_Middle_Mean
+Age_Old_Mean
+
+#Amountspent and Gender
+Male_sum<-0
+Male_count<-0
+Female_sum<-0
+Female_count<-0
+for(i in 1:1000){
+  if(orgdata$Gender[i]=="Female"){
+    Female_sum<-Female_sum+(orgdata$AmountSpent)[i]
+    Female_count<-Female_count+1
+  }
+  else if(orgdata$Gender[i]=="Male"){
+    Male_sum<-Male_sum+(orgdata$AmountSpent)[i]
+    Male_count<-Male_count+1
+  }
+}
+Gender_Female_Mean<-(Female_sum/Female_count)
+Gender_Male_Mean<-(Male_sum/Male_count)
+Gender_Female_Mean
+Gender_Male_Mean
+
+#Amountspent and Location
+Far_sum<-0
+Far_count<-0
+Close_sum<-0
+Close_count<-0
+for(i in 1:1000){
+  if(orgdata$Location[i]=="Close"){
+    Close_sum<-Close_sum+(orgdata$AmountSpent)[i]
+    Close_count<-Close_count+1
+  }
+  else if(orgdata$Location[i]=="Far"){
+    Far_sum<-Far_sum+(orgdata$AmountSpent)[i]
+    Far_count<-Far_count+1
+  }
+}
+Location_Close_Mean<-(Close_sum/Close_count)
+Location_Far_Mean<-(Far_sum/Far_count)
+Location_Close_Mean
+Location_Far_Mean
+
+#Amountspent and History
+High_sum<-0
+High_count<-0
+Medium_sum<-0
+Medium_count<-0
+Low_sum<-0
+Low_count<-0
+not_yet_purchased_sum<-0
+not_yet_purchased_count<-0
+for(i in 1:1000){
+  if(orgdata$History[i]=="Medium"){
+    Medium_sum<-Medium_sum+(orgdata$AmountSpent)[i]
+    Medium_count<-Medium_count+1
+  }
+  else if(orgdata$History[i]=="High"){
+    High_sum<-High_sum+(orgdata$AmountSpent)[i]
+    High_count<-High_count+1
+  }
+ else if(orgdata$History[i]=="Low"){
+    Low_sum<-Low_sum+(orgdata$AmountSpent)[i]
+    Low_count<-Low_count+1
+  }
+  else if(orgdata$History[i]=="not_yet_purchased"){
+    not_yet_purchased_sum<-not_yet_purchased_sum+(orgdata$AmountSpent)[i]
+    not_yet_purchased_count<-not_yet_purchased_count+1
+  }
+}
+
+History_Medium_Mean<-(Medium_sum/Medium_count)
+History_High_Mean<-(High_sum/High_count)
+History_Low_Mean<-(Low_sum/Low_count)
+History_not_yet_purchase_Mean<-(not_yet_purchased_sum/not_yet_purchased_count)
+History_Medium_Mean
+History_High_Mean
+History_Low_Mean
+History_not_yet_purchase_Mean
+```
+
+**3a-**
+
+```{r question_3_a}
+as_lr<-lm(AmountSpent~(Age)+ (Gender)+ (OwnHome)+ (Married)+ (Location)+ Salary+ Children+ (History)+ Catalogs, data=orgdata)
+summary(as_lr)
+
+#RMSE
+n = length(orgdata$AmountSpent)
+error = dim(n)
+for (k in 1:n) {
+  train1 = c(1:n)
+  train = train1[train1!=k]
+  m2 = lm(AmountSpent~(Age)+ (Gender)+ (OwnHome)+ (Married)+ (Location)+ Salary+ Children+ (History)+ Catalogs, data=orgdata[train, ])
+  pred = predict(m2, newdat=orgdata[-train ,])
+  obs = orgdata$AmountSpent[-train]
+  error[k] = obs-pred
+}
+me=mean(error)
+rmse=sqrt(mean(error^2))
+rmse
+```
+
+**3b-**
+
+```{r question_3_b}
+#linear
+Y<-orgdata$AmountSpent
+as_lr1<-lm(Y~Salary+Children+Catalogs, data=orgdata)
+summary(as_lr1)
+
+#evaluation_linear_rmse
+n = length(Y)
+error = dim(n)
+for (k in 1:n) {
+  train1 = c(1:n)
+  train = train1[train1!=k]
+  m2 = lm(AmountSpent ~ (Salary+Children+Catalogs), data=orgdata[train, ])
+  pred = predict(m2, newdat=orgdata[-train ,])
+  obs = orgdata$AmountSpent[-train]
+  error[k] = obs-pred
+}
+me=mean(error)
+rmse=sqrt(mean(error^2))
+rmse
+
+#linear
+as_lr2<-lm(Y~Salary+Catalogs+Location+History, data=orgdata)
+summary(as_lr2)
+
+#evaluation_linear_rmse
+n = length(Y)
+error = dim(n)
+for (k in 1:n) {
+  train1 = c(1:n)
+  train = train1[train1!=k]
+  m2 = lm(AmountSpent ~ (Salary+Catalogs+Location+History), data=orgdata[train, ])
+  pred = predict(m2, newdat=orgdata[-train ,])
+  obs = orgdata$AmountSpent[-train]
+  error[k] = obs-pred
+}
+me=mean(error)
+rmse=sqrt(mean(error^2))
+rmse
+
+
+#non_linear
+summary(lm(Y ~ (poly(Salary,degree = 3)+poly(Children, degree=3)+poly(Catalogs,degree = 3)), data = orgdata))
+
+#evaluation_nonlinear_rmse
+n = length(Y)
+error = dim(n)
+for (k in 1:n) {
+  train1 = c(1:n)
+  train = train1[train1!=k]
+  m2 = lm(AmountSpent ~ (poly(Salary,degree = 3)+poly(Children, degree=3)+poly(Catalogs,degree = 3)), data=orgdata[train, ])
+  pred = predict(m2, newdat=orgdata[-train ,])
+  obs = orgdata$AmountSpent[-train]
+  error[k] = obs-pred
+}
+me=mean(error)
+rmse=sqrt(mean(error^2))
+rmse
+
+#non_linear
+summary(lm(Y ~ (poly(Salary,degree = 3)+poly(Catalogs, degree=3)+Location+History), data = orgdata))
+
+#evaluation_nonlinear_rmse
+n = length(Y)
+error = dim(n)
+for (k in 1:n) {
+  train1 = c(1:n)
+  train = train1[train1!=k]
+  m2 = lm(AmountSpent ~ (poly(Salary,degree = 3)+poly(Catalogs, degree=3)+Location+History), data=orgdata[train, ])
+  pred = predict(m2, newdat=orgdata[-train ,])
+  obs = orgdata$AmountSpent[-train]
+  error[k] = obs-pred
+}
+me=mean(error)
+rmse=sqrt(mean(error^2))
+rmse
+
+#non_linear
+summary(lm(Y ~ (poly(Salary,degree = 3)+poly(Catalogs, degree=3)+Location+History+Age+Children+Gender), data = orgdata))
+
+#evaluation_nonlinear_rmse
+n = length(Y)
+error = dim(n)
+for (k in 1:n) {
+  train1 = c(1:n)
+  train = train1[train1!=k]
+  m2 = lm(AmountSpent ~ (poly(Salary,degree = 3)+poly(Catalogs, degree=3)+Location+History+Age+Children+Gender), data=orgdata[train, ])
+  pred = predict(m2, newdat=orgdata[-train ,])
+  obs = orgdata$AmountSpent[-train]
+  error[k] = obs-pred
+}
+me=mean(error)
+rmse=sqrt(mean(error^2))
+rmse
+
+```
+
+**3c-**
+
+```{r question_3_c}
+library(MASS)
+fit = lm(AmountSpent~(Age)+ (Gender)+ (OwnHome)+ (Married)+ (Location)+ Salary+ Children+ (History)+ Catalogs, data=orgdata)
+stepAIC(fit, direction="backward")
+
+```
+
