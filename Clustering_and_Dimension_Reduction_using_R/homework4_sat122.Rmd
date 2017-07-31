@@ -1,0 +1,269 @@
+---
+title: "homework4"
+author: "sai charan talipineni"
+date: "7 March 2017"
+output: html_document
+---
+```{r task1, warning=FALSE}
+library(cluster)
+set.seed(123)
+
+##1
+unempstate_raw<-read.csv("D:/semester/2nd sem/DATA_MINING/hw4/unempstates.csv")
+#summary(unempstate_raw)
+#str(unempstate_raw)
+head(unempstate_raw)
+
+t_unemp<-as.data.frame(t(unempstate_raw))
+head(t_unemp[,1:50])
+
+pca_unemp<-prcomp(t_unemp,center=TRUE, scale = TRUE)
+
+summary(pca_unemp)
+
+screeplot(pca_unemp)
+mtext(side=1, "Months Principal Components",  line=1, font=2)
+
+#From the screeplot, principal component 1 contains most of the information. It is alone sufficient. Based on the requirement of the problem, we can consider principal components 2 and 3.
+
+plot(pca_unemp$rotation[,1], main = "Loadings for first principal component.") #pc1
+
+load_unemp<-predict(pca_unemp)
+
+plot(load_unemp[,1], main ="Data loaded on first principal component." ) #pc1 on data
+
+##2
+plot(load_unemp[,1:2], type="n", main = "Project states on the first two principal components")
+text(x=load_unemp[,1], y=load_unemp[,2], labels=rownames(t_unemp))
+
+##3
+dist_t_unemp<-dist(t_unemp)
+dist_t_unemp.mds<-cmdscale(dist_t_unemp)
+
+plot(dist_t_unemp.mds, type = 'n', main = "MDS map")
+text(dist_t_unemp.mds, labels=rownames(t_unemp))
+
+##4
+state_names<-rownames(t_unemp)
+
+###k-means
+kmean4_tunemp <- kmeans(t_unemp, centers=4, nstart=10)
+o=order(kmean4_tunemp$cluster)
+kmean4_tunemp$cluster[o]
+#data.frame(state.names[o],kmean4_tunemp$cluster[o])
+
+plot(dist_t_unemp.mds, type = 'n', main = "K-means4")
+text(dist_t_unemp.mds, labels=state_names, col = kmean4_tunemp$cluster+1)
+
+kmean8_tunemp <- kmeans(t_unemp, centers=8, nstart=20)
+o=order(kmean8_tunemp$cluster)
+kmean8_tunemp$cluster[o]
+
+plot(dist_t_unemp.mds, type = 'n', main ="K-means8" )
+text(dist_t_unemp.mds, labels=state_names, col = kmean8_tunemp$cluster+1)
+
+###h-clustering
+hsingle<-hclust(dist_t_unemp,method = "single")
+plot(hsingle, main = "h-single")
+hsingle4<-cutree(hsingle,k=4)
+plot(dist_t_unemp.mds, type = 'n', main = "h-single4")
+text(dist_t_unemp.mds, labels=state_names, col = hsingle4+2)
+
+hsingle8<-cutree(hsingle,k=8)
+plot(dist_t_unemp.mds, type = 'n',main = "h-single8")
+text(dist_t_unemp.mds, labels=state_names, col = hsingle8+1)
+
+hcomplete<-hclust(dist_t_unemp,method = "complete")
+plot(hcomplete, main = "h-complete")
+hcomplete4<-cutree(hcomplete,k=4)
+plot(dist_t_unemp.mds, type = 'n', main = "h-complete4")
+text(dist_t_unemp.mds, labels=state_names, col = hcomplete4+1)
+
+hcomplete8<-cutree(hcomplete,k=8)
+plot(dist_t_unemp.mds, type = 'n',main = "h-complete8")
+text(dist_t_unemp.mds, labels=state_names, col = hcomplete8+1)
+
+haverage<-hclust(dist_t_unemp,method="average")
+plot(haverage, main = "h-average")
+haverage4<-cutree(haverage,k=4)
+plot(dist_t_unemp.mds, type = 'n', main = "h-average4")
+text(dist_t_unemp.mds, labels=state_names, col = haverage4+1)
+
+haverage8<-cutree(haverage,k=8)
+plot(dist_t_unemp.mds, type = 'n', main = "h-average8")
+text(dist_t_unemp.mds, labels=state_names, col = haverage8+1)
+
+##5
+
+hist(kmean4_tunemp$cluster)
+hist(kmean8_tunemp$cluster)
+hist(hsingle4)
+hist(hsingle8)
+hist(haverage4)
+hist(haverage8)
+hist(hcomplete4)
+hist(hcomplete8)
+
+#considering both histograms and  and inter-cluster separation distances the h-complete 8 clustering result seems to be most meaningful. Based on both criterias ,the second position could be allocated to the  k-means 4 clustering result.
+
+#Based on histograms only, k-means 4 and k-means 8 are well balanced clustering results.
+```
+
+
+```{r task2}
+library('foreign')
+library('ggplot2')
+library('dplyr')
+
+##1
+
+## Add all roll call vote data frames to a single list
+rollcall.data = read.dta("D:/semester/2nd sem/DATA_MINING/hw4/sen113kh.dta", convert.factors = FALSE)
+dim(rollcall.data)
+
+rollcall.simplified <- function(df) {
+  no.pres <- subset(df, state < 99)
+  ## to group all Yea and Nay types together
+  for(i in 10:ncol(no.pres)) {
+    no.pres[,i] = ifelse(no.pres[,i] > 6, 0, no.pres[,i])
+    no.pres[,i] = ifelse(no.pres[,i] > 0 & no.pres[,i] < 4, 1, no.pres[,i])
+    no.pres[,i] = ifelse(no.pres[,i] > 1, -1, no.pres[,i])
+  }
+
+  return(as.matrix(no.pres[,10:ncol(no.pres)]))
+}
+
+rollcall.simple = rollcall.simplified(rollcall.data)
+
+## Multiply the matrix by its transpose to get Senator-to-Senator tranformation, 
+## and calculate the Euclidan distance between each Senator.
+rollcall.dist = dist(rollcall.simple %*% t(rollcall.simple))
+
+## Do the MDS
+rollcall.mds = as.data.frame((cmdscale(rollcall.dist, k = 2)) * -1)
+
+
+congresses = 113
+
+  names(rollcall.mds) = c("x", "y")
+
+  congress = subset(rollcall.data, state < 99)
+
+  congress.names = congress$name
+
+  rollcall.mds = transform(rollcall.mds, name = congress.names, party = as.factor(congress$party), congress = congresses)
+
+
+head(rollcall.mds)
+
+
+
+cong.113 <- rollcall.mds
+
+base.113 <- ggplot(cong.113, aes(x = x, y = y)) +
+  scale_alpha(guide="none") + theme_bw() +
+  theme(axis.ticks = element_blank(),
+       axis.text.x = element_blank(),
+       axis.text.y = element_blank()) +
+  xlab("") +
+  ylab("") +
+  ggtitle("MDS plot")+
+  scale_shape(name = "Party", breaks = c("100", "200", "328"),
+              labels = c("Dem.", "Rep.", "Ind."), solid = FALSE) +
+  scale_color_manual(name = "Party", values = c("100" = "blue",
+                                                "200" = "red",
+                                                "328"="grey"),
+                     breaks = c("100", "200", "328"),
+                     labels = c("Dem.", "Rep.", "Ind."))
+
+print(base.113 + geom_point(aes(shape = party,
+                                alpha = 0.75),size=3))
+print(base.113 + geom_text(aes(color = party,  alpha = 1, label = cong.113$name),size=3))
+
+##2
+rollcall.mds2<-data.frame(rollcall.mds[,1],rollcall.mds[,2])
+rollcall.dist.org<-dist(rollcall.simple)
+
+#k-means
+kmeans2_rollcall<-kmeans(rollcall.simple,centers = 2,nstart = 10)
+plot(rollcall.mds2, type = 'n',main="k-means2")
+text(rollcall.mds2, labels=rollcall.mds$name, col = kmeans2_rollcall$cluster+1)
+
+#hclust
+h2single<-hclust(rollcall.dist.org,method = "single")
+plot(h2single, main = "h-single")
+h2single2<-cutree(h2single,k=2)
+plot(rollcall.mds2, type = 'n',main="h-single2")
+text(rollcall.mds2, labels=rollcall.mds$name, col = h2single2+1)
+
+h2average<-hclust(rollcall.dist.org,method = "average")
+plot(h2average, main = "h-average")
+h2average2<-cutree(h2average,k=2)
+plot(rollcall.mds2, type = 'n', main= "h-average2")
+text(rollcall.mds2, labels=rollcall.mds$name, col = h2average2+1)
+
+h2complete<-hclust(rollcall.dist.org,method = "complete")
+plot(h2complete, main = "h-complete")
+h2complete2<-cutree(h2complete,k=2)
+plot(rollcall.mds2, type = 'n', main="h-complete2")
+text(rollcall.mds2, labels=rollcall.mds$name, col = h2complete2+1)
+
+##3
+# k-means: 
+# COLLINS should be republican but wrongly clustered as democrat.
+# LAUTENBERG should be democrats but wrongly clustered as republican.
+# KERRY JOHN should be democrats but wrongly clustered as republican.
+#
+#h-single:
+#All the democrats(left-side) are wrongly clustered as Republicans and COLLINS,MURKOWSKI should be republicans but wrongly clustered as democrat.
+#
+#h-average and h-complete:
+#COLLINS,MURKOWSKI, CHIESA should be republicans but wrongly clustered as democrats.
+
+##4
+cluster.purity <- function(classes, clusters) {
+  sum(apply(table(classes, clusters), 2, max)) / length(clusters)
+}
+
+cluster.entropy <- function(classes,clusters) {
+  en <- function(x) {
+    s = sum(x)
+    sum(sapply(x/s, function(p) {if (p) -p*log2(p) else 0} ) )
+  }
+  M = table(classes, clusters)
+  m = apply(M, 2, en)
+  c = colSums(M) / sum(M)
+  sum(m*c)
+}
+
+classess<-recode(rollcall.mds$party,"200"="1","100"="2")
+
+kmeans_clusters<-as.factor(kmeans2_rollcall$cluster)
+h2single_clusers<-as.factor(h2single2)
+h2average_clusers<-as.factor(h2average2)
+h2complete_clusers<-as.factor(h2complete2)
+
+kmeans_p<-cluster.purity(classess,kmeans_clusters)
+h2single_p<-cluster.purity(classess,h2single_clusers)
+h2average_p<-cluster.purity(classess,h2average_clusers)
+h2complete_p<-cluster.purity(classess,h2complete_clusers)
+
+purity<-c(kmeans_p,h2single_p,h2average_p,h2complete_p)
+
+kmeans_e<-cluster.entropy(classess,kmeans_clusters)
+h2single_e<-cluster.entropy(classess,h2single_clusers)
+h2average_e<-cluster.entropy(classess,h2average_clusers)
+h2complete_e<-cluster.entropy(classess,h2complete_clusers)
+
+entropy<-c(kmeans_e,h2single_e,h2average_e,h2complete_e)
+
+tab<-rbind(purity,entropy)
+colnames(tab)<-c('k-means','hclust-single','hclust-average','hclust-complete')
+tab
+
+##5
+# From both the measures and mis-classified members, h-average and h-complete seems to be most meaningful cluster results with high purity and low entropy compared to others.
+
+
+```
+
