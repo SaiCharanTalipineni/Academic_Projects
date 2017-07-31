@@ -1,0 +1,514 @@
+
+---
+title: "cleaned_data_visualization"
+output: html_document
+---
+
+```{r, warning=FALSE}
+library("lubridate")
+library("dplyr")
+library("ggplot2")
+library("plotly")
+library("ggmap")
+
+b.ds<-read.csv("C:/Users/sat122/Downloads/dm/finaldataset2.csv", header=T, stringsAsFactors = F)
+
+#b.ds<-b.ds[b.ds$SYear!=2016,]
+#b.ds<-b.ds[b.ds$EYear!=2016,]
+
+
+b.ds$StartDate<-as.Date(b.ds$StartDate, format = "%m/%d/%Y")
+b.ds$EndDate<-as.Date(b.ds$EndDate, format = "%m/%d/%Y")
+
+b.ds$y.week<-isoweek(ymd(b.ds$StartDate))
+b.ds$weekday<-weekdays(b.ds$StartDate)
+
+trips.by.day<- aggregate(b.ds$weekday, by=list(b.ds$weekday),length)
+trips.by.day<-plyr::rename(trips.by.day, c("Group.1"="days", "x"="count"))
+trips.by.day$days<-factor(trips.by.day$days, levels = c("Sunday","Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"))
+ggplot(trips.by.day, aes(x=days,y=count)) + geom_bar(stat="identity", fill = "#FF9900") +ggtitle("Number of trips by the day") +geom_text(aes(label=count), vjust=2, color="black", size=4)+ theme_minimal()
+
+
+trips.by.hourofday<-as.data.frame(table(b.ds$weekday,b.ds$SHour))
+colnames(trips.by.hourofday)<-c("day", "hour","count")
+ggplot(trips.by.hourofday, aes(day, hour )) +
+  geom_tile(aes(fill = count), color = "white") +
+  ggtitle("Bike trips count")+
+  scale_fill_gradient(low = "skyblue", high = "darkblue") +
+  xlab("Days in a week") +
+  ylab("Hours in a day") +
+  theme(legend.title = element_text(size = 10),
+        legend.text = element_text(size = 12),
+        plot.title = element_text(size=16),
+        axis.title=element_text(size=14,face="bold"),
+        axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(fill = "count")
+
+
+b.ds<-mutate(b.ds, t.dur.min=floor((Tripduration/60)+0.5))
+t.by.time<-split(b.ds, cut(b.ds$t.dur.min, c(0, 15, 30, 60,90,4000), include.lowest=T))
+t.by.time.count<-sapply(t.by.time, nrow, simplify = T)
+names(t.by.time.count)<-c("0-15min","15-30mins","30-60mins","60-90mins","90mins+")
+barplot(t.by.time.count, main="Ride Distribution by Length of Ride", xlab = "Time Period", ylab="count", col = "red")
+
+
+holidays<-read.csv("C:/Users/sat122/Downloads/dm/Holiday.csv", header = T, stringsAsFactors = F)
+holidays$Date<-as.Date(holidays$Date, format = "%m/%d/%Y")
+b.ds<-merge(b.ds, holidays, by.x = "StartDate", by.y = "Date")
+b.ds$Holiday[b.ds$weekday=="Saturday"]<-1
+b.ds$Holiday[b.ds$weekday=="Sunday"]<-1
+b.ds$Holiday<-factor(b.ds$Holiday)
+b.ds$weekday<-factor(b.ds$weekday)
+hol_week_count<-aggregate(b.ds$Holiday, by=list(b.ds$Holiday), length)
+colnames(hol_week_count)<-c("type_of_day","trip_count")
+type_of_day<-c("weekday","holiday")
+hol_week_count$type_of_day<-factor(hol_week_count$type_of_day)
+ggplot(hol_week_count, aes(x=type_of_day,y=trip_count)) + geom_bar(stat="identity", fill = "#669900") +
+    ggtitle("Rides count in weekday vs holiday ") +
+      geom_text(aes(label=trip_count), vjust=2, color="black", size=4)+theme_minimal()
+
+tab.hol.week<-as.data.frame(table(b.ds$Holiday, b.ds$SHour))
+colnames(tab.hol.week)<-c("day_type","hour","count")
+tab.hol.week$day_type<-plyr::mapvalues(tab.hol.week$day_type, from = c("0", "1"), to = c("workingday","holiday"))
+#tab.hol.week$day_type<-factor(tab.hol.week$day_type, levels = c("workingday","holiday"))
+ggplot(tab.hol.week, aes(x=hour, y=count, group=day_type, colour=day_type)) +
+    geom_line() + ggtitle("Number of trips by the day type")
+
+temp.rides<-aggregate(b.ds$TAVG, by=list(floor((b.ds$TAVG)+0.5)), length)
+colnames(temp.rides)<-c("temperature_F","rides")
+ggplot(temp.rides, aes(x=temperature_F,y=rides)) + geom_line()+ggtitle("Number of trips by the temperature")+ theme_minimal()+ geom_smooth(colour='blue',stat = "smooth",method="loess",span=0.2)
+
+
+hour.rides<-aggregate(b.ds$SHour, by=list(b.ds$SHour), length)
+colnames(hour.rides)<-c("hour","count")
+hour.rides$hour<-factor(hour.rides$hour)
+ggplot(hour.rides, aes(x=hour,y=count)) + geom_bar(stat="identity", fill = "#FF9900") +ggtitle("Number of trips by the hour")+theme_minimal()
+
+
+#write.csv(b.ds,file="bds.csv")
+```
+
+```{r,  warning=FALSE}
+library(ggmap)
+
+station <- read.csv("C:/Users/sat122/Downloads/dm/2016-Q1/HealthyRideStations2016.csv", header = T)
+head(station)
+
+map <- get_map(location = 'Pittsburgh', zoom = 13, maptype = "hybrid")
+
+rack <- as.data.frame(cbind(station$Latitude, station$Longitude, station$RackQnty))
+
+colnames(rack) <- c("lat", "lon", "num")
+
+mapPoints <- ggmap(map) + geom_point(aes(x = rack$lon, y = rack$lat, size = rack$num), colour="#FF9933", data = rack) + 
+  scale_size_area(name = "Rack Quantity")
+plot(mapPoints)
+
+```
+
+```{r datacleaning for prediction, warning=FALSE}
+
+
+rent_data<-b.ds[,c("From.station.id","SYear","SMonth","SDay","SHour","TAVG","y.week","weekday","Holiday","temp")]
+rent_data$count<-1
+rent_bike_count<-aggregate(count~From.station.id+SYear+SMonth+SDay+SHour+TAVG+y.week+weekday+Holiday+temp, rent_data, sum)
+names(rent_bike_count)<-c("st.id","year","month","day", "hour","tavg","y.week", "wd","holiday","temp","rent.count")
+#####training and testing data
+rent_bike_count$temp<-as.factor(rent_bike_count$temp)
+rent_bike_count_train<-rent_bike_count[rent_bike_count$year==2016,]
+rent_bike_count_test<-rent_bike_count[rent_bike_count$year==2015,]
+
+#rent_bike_count_train<-rent_bike_count[rent_bike_count$day<20,]
+#rent_bike_count_test<-rent_bike_count[rent_bike_count$day>=20,]
+
+
+
+ret_data<-b.ds[,c("To.station.id","EYear","EMonth","EDay","EHour","TAVG","y.week","weekday","Holiday","temp")]
+ret_data$count<-1
+ret_bike_count<-aggregate(count~To.station.id+EYear+EMonth+EDay+EHour+TAVG+y.week+weekday+Holiday+temp, ret_data, sum)
+names(ret_bike_count)<-c("st.id","year","month","day", "hour","tavg","y.week", "wd","holiday","temp","ret.count")
+#####training and testing data
+ret_bike_count_train<-ret_bike_count[ret_bike_count$day<20,]
+ret_bike_count_test<-ret_bike_count[ret_bike_count$day>=20,]
+
+
+
+cl_data<-merge(x=rent_bike_count, y=ret_bike_count, 
+               by.x = c("st.id","year","month","day", "hour","tavg","y.week", "wd","holiday","temp"),
+               by.y= c("st.id","year","month","day", "hour","tavg","y.week", "wd","holiday","temp"), all = TRUE)
+cl_data[is.na(cl_data)] <- 0
+cl_data<-distinct(cl_data)
+
+cl_data$rent.ret<-(cl_data$rent.count-cl_data$ret.count)
+
+#cl_data$rent.ret[cl_data$rent.ret!=0]=1
+
+balanc<-which(cl_data$rent.ret==0)
+cl_data<-cl_data[-balanc,]
+cl_data$rent.ret[cl_data$rent.ret<0]=0                                            #for rent>return or return>rent
+cl_data$rent.ret[cl_data$rent.ret>0]=1
+
+cl_data<-mutate(cl_data, rent.count=NULL, ret.count=NULL)
+
+#####training and testing data
+
+
+#cl_data_train<-cl_data[cl_data$day<20,]
+#cl_data_test<-cl_data[cl_data$day>=20,]
+
+
+#cl_data_train<-cl_data[cl_data$year==2016,]
+#cl_data_test<-cl_data[cl_data$year==2015,]
+
+ #write.csv(cl_data_train,file="cl_data_train.csv")
+ #write.csv(cl_data_test,file="cl_data_test.csv")
+
+```
+
+```{r regression, warnings=FALSE}
+library(MASS)
+error = dim(n)
+
+  m2 = lm(rent.count ~ ., data=rent_bike_count_train[,-2])
+  pred = predict(m2, newdat=rent_bike_count_test[,-2])
+  obs = rent_bike_count_test$rent.count
+  error = obs-pred
+
+me=mean(error)
+me
+
+rmse=sqrt(mean(error^2))
+rmse
+
+stepAIC(m2,direction = "backward")
+
+poi<- glm(ret.count ~ ., family="poisson", data=ret_bike_count_train)
+
+```
+
+```{r classification, warnings=FALSE}
+library(MASS) # for the example dataset 
+#library(plyr) # for recoding data
+library(ROCR) # for plotting roc
+library(e1071) # for NB and SVM
+library(rpart) # for decision tree
+library(ada) # for adaboost
+library(class)
+
+set.seed(12345) # set the seed so you can get exactly the same results whenever you run the code
+
+do.classification <- function(train.set, test.set, 
+                              cl.name, verbose=F) {
+  ## note: to plot ROC later, we want the raw probabilities,
+  ## not binary decisions
+  switch(cl.name, 
+         knn30 = { # here we test k=3; you should evaluate different k's
+           prob = knn(train.set[,-1], test.set[,-1], cl=train.set[,1], k = 30, prob=T)
+           attr(prob,"prob")[prob==0] = 1-attr(prob,"prob")[prob==0]
+           prob = attr(prob,"prob")
+           #print(cbind(prob,as.character(test.set$y)))
+           prob
+         },
+          knn10 = { # here we test k=3; you should evaluate different k's
+           prob = knn(train.set[,-1], test.set[,-1], cl=train.set[,1], k = 10, prob=T)
+           attr(prob,"prob")[prob==0] = 1-attr(prob,"prob")[prob==0]
+           prob = attr(prob,"prob")
+           #print(cbind(prob,as.character(test.set$y)))
+           prob
+         },
+          knn50 = { # here we test k=3; you should evaluate different k's
+           prob = knn(train.set[,-1], test.set[,-1], cl=train.set[,1], k = 50, prob=T)
+           attr(prob,"prob")[prob==0] = 1-attr(prob,"prob")[prob==0]
+           prob = attr(prob,"prob")
+           #print(cbind(prob,as.character(test.set$y)))
+           prob
+         },
+         lr = { # logistic regression
+           model = glm(y~., family=binomial, data=train.set)
+           if (verbose) {
+             print(summary(model))             
+           }
+           prob = predict(model, newdata=test.set, type="response") 
+           #print(cbind(prob,as.character(test.set$y)))
+           prob
+         },
+         nb = {
+           model = naiveBayes(y~., data=train.set)
+           prob = predict(model, newdata=test.set, type="raw") 
+           #print(cbind(prob,as.character(test.set$y)))
+           prob = prob[,2]/rowSums(prob) # renormalize the prob.
+           prob
+         },
+         dtree = {
+           model = rpart(y~., data=train.set)
+           if (verbose) {
+             print(summary(model)) # detailed summary of splits
+             printcp(model) # print the cross-validation results
+             plotcp(model) # visualize the cross-validation results
+             ## plot the tree
+             plot(model, uniform=TRUE, main="Classification Tree")
+             text(model, use.n=TRUE, all=TRUE, cex=.8)
+           }           
+           prob = predict(model, newdata=test.set)
+
+           if (1) { # here we use the default tree, 
+             ## you should evaluate different size of tree
+             ## prune the tree 
+             pfit<- prune(model, cp=model$cptable[which.min(model$cptable[,"xerror"]),"CP"])
+             prob = predict(pfit, newdata=test.set)
+             ## plot the pruned tree 
+            # plot(pfit, uniform=TRUE,main="Pruned Classification Tree")
+             #text(pfit, use.n=TRUE, all=TRUE, cex=.8)             
+           }
+           #print(cbind(prob,as.character(test.set$y)))
+           prob = prob[,2]/rowSums(prob) # renormalize the prob.
+           prob
+         },
+         svm = {
+           #model = svm(y~., data=train.set, probability=T)
+           if (1) { # fine-tune the model with different kernel and parameters
+             ## evaluate the range of gamma parameter between 0.000001 and 0.1
+             ## and cost parameter from 0.1 until 10
+             tuned <- tune.svm(y~., data = train.set, 
+                               kernel="radial", 
+                               gamma = 10^(-6:-1), cost = 10^(-1:1))
+             #print(summary(tuned))
+             gamma = tuned[['best.parameters']]$gamma
+             cost = tuned[['best.parameters']]$cost
+             model = svm(y~., data = train.set, probability=T, 
+                         kernel="radial", gamma=gamma, cost=cost)                        
+           }
+           prob = predict(model, newdata=test.set, probability=T)
+           prob = attr(prob,"probabilities")
+           #print(cbind(prob,as.character(test.set$y)))
+           #print(dim(prob))
+           prob = prob[,which(colnames(prob)==1)]/rowSums(prob)
+           prob
+         },
+         ada = {
+           model = ada(y~., data = train.set)
+           prob = predict(model, newdata=test.set, type='probs')
+           #print(cbind(prob,as.character(test.set$y)))
+           prob = prob[,2]/rowSums(prob)
+           prob
+         }
+  ) 
+}
+
+pre.test <- function(dataset, cl.name, prob.cutoff=0.5, get.performance = F) {
+  ## by default use 0.5 as cut-off
+  train.set = dataset[cl_train,]
+  test.set = dataset[cl_test,]
+  cat('pre-test',cl.name,':',
+      '#training:',nrow(train.set),
+      '#testing',nrow(test.set),'\n')
+  prob = do.classification(train.set, test.set, cl.name)
+  # prob is an array of probabilities for cases being positive
+
+  ## get confusion matrix
+  predicted = as.numeric(prob > prob.cutoff)
+  actual = test.set$y
+  confusion.matrix = table(actual,factor(predicted,levels=c(0,1)))
+  error = (confusion.matrix[1,2]+confusion.matrix[2,1]) / nrow(test.set)  
+  cat('error rate:',error,'\n')
+  # you may compute other measures based on confusion.matrix
+  # @see handout03 p.30-
+
+  ## plot ROC
+  result = data.frame(prob,actual)
+  pred = prediction(result$prob,result$actual)
+  perf = performance(pred, "tpr","fpr")
+  plot(perf)  
+  
+   ## get other measures by using 'performance'
+  get.measure <- function(pred, measure.name='auc') {
+    perf = performance(pred,measure.name)
+    m <- unlist(slot(perf, "y.values"))
+    m
+  }
+  err = mean(get.measure(pred, 'err'))
+  precision = mean(get.measure(pred, 'prec'),na.rm=T)
+  recall = mean(get.measure(pred, 'rec'),na.rm=T)
+  fscore = mean(get.measure(pred, 'f'),na.rm=T)
+  cat('error=',err,'precision=',precision,'recall=',recall,'f-score',fscore,'\n')
+  auc = get.measure(pred, 'auc')
+  cat('auc=',auc,'\n')
+  
+    if (get.performance) return (perf)
+  else  return(rbind(
+      error=err,
+      accuracy = 1-err,
+      precision = precision,
+      recall = recall,
+      fscore=fscore,
+      auc=auc))
+}
+
+k.fold.cv <- function(dataset, cl.name, k.fold=10, prob.cutoff=0.5, get.performance=F) {
+  ## default: 10-fold CV, cut-off 0.5 
+  n.obs <- nrow(dataset) # no. of observations 
+  s = sample(n.obs)
+  errors = dim(k.fold)
+  probs = NULL
+  actuals = NULL
+  for (k in 1:k.fold) {
+    test.idx = which(s %% k.fold == (k-1) ) # use modular operator
+    train.set = dataset[-test.idx,]
+    test.set = dataset[test.idx,]
+    prob = do.classification(train.set, test.set, cl.name)
+    predicted = as.numeric(prob > prob.cutoff)
+    actual = test.set$y
+    confusion.matrix = table(actual,factor(predicted,levels=c(0,1)))
+    confusion.matrix
+    error = (confusion.matrix[1,2]+confusion.matrix[2,1]) / nrow(test.set)  
+    errors[k] = error
+    cat('\t\terror=',error,'\n')
+    probs = c(probs,prob)
+    actuals = c(actuals,actual)
+    ## you may compute other measures and store them in arrays
+  }
+  avg.error = mean(errors)
+  cat(k.fold,'-fold CV results:','avg error=',avg.error,'\n')
+  
+  ## plot ROC
+  result = data.frame(probs,actuals)
+  pred = prediction(result$probs,result$actuals)
+  perf = performance(pred, "tpr","fpr")
+  plot(perf)  
+  
+  ## get other measures by using 'performance'
+  get.measure <- function(pred, measure.name='auc') {
+    perf = performance(pred,measure.name)
+    m <- unlist(slot(perf, "y.values"))
+    #     print(slot(perf, "x.values"))
+    #     print(slot(perf, "y.values"))
+    m
+  }
+  err = mean(get.measure(pred, 'err'))
+  precision = mean(get.measure(pred, 'prec'),na.rm=T)
+  recall = mean(get.measure(pred, 'rec'),na.rm=T)
+  fscore = mean(get.measure(pred, 'f'),na.rm=T)
+  cat('error=',err,'precision=',precision,'recall=',recall,'f-score',fscore,'\n')
+  auc = get.measure(pred, 'auc')
+  cat('auc=',auc,'\n')
+  
+  if (get.performance) return (perf)
+  else
+    return(rbind(
+      error=err,
+      accuracy = 1-err,
+      precision = precision,
+      recall = recall,
+      fscore=fscore,
+      auc=auc))
+}
+
+my.classifier <- function(dataset, do.cv=F, cl.name='knn', get.performance = F) {
+  n.obs <- nrow(dataset) # no. of observations in dataset
+  n.cols <- ncol(dataset) # no. of predictors
+  cat('my dataset:',
+      n.obs,'observations',
+      n.cols-1,'predictors','\n')
+  print(dataset[1:3,])
+  cat('label (y) distribution:')
+  print(table(dataset$y))
+
+  if (do.cv) return(k.fold.cv(dataset, cl.name, k.fold=10, prob.cutoff=0.5, get.performance=get.performance))
+  else
+  return(pre.test(dataset, cl.name, get.performance=get.performance))
+  
+}
+
+load.data.example_svm<-function(){
+  cl_data<-cl_data[cl_data$month<5,]
+  cl_train<-which(cl_data$day<20)
+cl_test<-which(cl_data$day>=20)
+}
+
+load.data.example <- function() {
+  
+cl_train<-which(cl_data$day<20)
+ cl_test<-which(cl_data$day>=20)
+
+# cl_train<-which(cl_data$year==2016)
+# cl_test<-which(cl_data$year==2015)
+  
+  cl_data$st.id<-as.factor(cl_data$st.id)
+  cl_data$year<-as.factor(cl_data$year)
+  cl_data$month<-as.factor(cl_data$month)
+  cl_data$day<-as.factor(cl_data$day)
+  cl_data$hour<-as.factor(cl_data$hour)
+  cl_data$y.week<-as.factor(cl_data$y.week)
+ cl_data$temp<-as.factor(cl_data$temp)
+ cl_data$rent.ret<-as.factor(cl_data$rent.ret)
+ colnames(cl_data)[11]<-"y"
+}
+
+
+load.data.example2<-function(){
+    cl_data$st.id<-as.numeric(cl_data$st.id)
+    cl_data$year<-as.numeric(cl_data$year)
+  cl_data$month<-as.numeric(cl_data$month)
+  cl_data$day<-as.numeric(cl_data$day)
+  cl_data$hour<-as.numeric(cl_data$hour)
+  cl_data$wd<-as.numeric(cl_data$wd)
+  cl_data$y.week<-as.numeric(cl_data$y.week)
+  cl_data$holiday<-as.numeric(cl_data$holiday)
+ cl_data$temp<-as.numeric(cl_data$temp)
+ 
+   y = cl_data[,c(11)]
+  cl_data = cl_data[,1:10]
+  cl_data = cbind(y,cl_data)
+  Xdata = model.matrix(y~., data = cl_data)[,-1]
+  cl_data = data.frame(y = y, Xdata)
+  
+ normalize <- function(x) {
+return ((x - min(x)) / (max(x) - min(x))) }
+ 
+y=cl_data[,c(1)]
+Xdataset_num <- as.data.frame(lapply(cl_data[2:11], normalize))
+dataset_num <- data.frame(y=y, Xdataset_num)
+}
+
+#load.data.example()
+#load.data.example2()
+#load.data.example_svm()
+
+### main ###
+
+dataset = cl_data
+
+dataset_num = dataset_num
+
+knn10<-my.classifier(dataset_num,do.cv = F, cl.name = "knn10", get.performance = T)
+knn30<-my.classifier(dataset_num,do.cv = F, cl.name = "knn30", get.performance = T)
+knn50<- my.classifier(dataset_num,do.cv = F, cl.name = "knn50", get.performance = T)
+lr<-my.classifier(dataset,do.cv = F, cl.name = "lr", get.performance = T)
+nb<- my.classifier(dataset,do.cv = F, cl.name = "nb", get.performance = T)
+dtree<-my.classifier(dataset,do.cv = F, cl.name = "dtree", get.performance = TRUE)
+ada<-my.classifier(dataset,do.cv = F, cl.name = "ada", get.performance = T)
+#svm<-my.classifier(dataset,do.cv = F, cl.name = "svm", get.performance = T)
+
+colours <- c("red", "orange", "yellow", "green", "blue", "purple","black")
+plot(lr, col = colours[1])
+plot(knn10, add = TRUE, col = colours[2])
+plot(knn30, add = TRUE, col = colours[3])
+plot(knn50, add = TRUE, col = colours[4])
+plot(nb, add = TRUE, col = colours[5])
+plot(dtree, add = TRUE, col = colours[6])
+#plot(svm, add = TRUE, col = colours[7])
+plot(ada, add = TRUE, col = colours[7])
+legend("bottomright", inset=.02,
+       c("lr","knn10","knn30","knn50","nb","dtree","ada"), fill=colours)
+
+results1 <- cbind( my.classifier(dataset_num, cl.name='knn10',do.cv=F),
+                   my.classifier(dataset_num, cl.name='knn30',do.cv=F), # use dataset_num for kNN
+                   my.classifier(dataset_num, cl.name='knn50',do.cv=F), # use dataset_num for kNN
+                   my.classifier(dataset, cl.name='lr',do.cv=F),
+                   my.classifier(dataset, cl.name='nb',do.cv=F),
+                   my.classifier(dataset, cl.name='dtree',do.cv=F),
+                   my.classifier(dataset, cl.name='ada',do.cv=F)
+)
+colnames(results1)<-c("knn10","knn30","knn50","lr","nb","dtree","ada")
+```
+
